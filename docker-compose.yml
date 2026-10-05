@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: bd-telecom-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bd_telecom
+      POSTGRES_PASSWORD: bd_telecom_password
+      POSTGRES_DB: bd_telecom
+    ports:
+      - "5433:5432"
+    volumes:
+      - bd_telecom_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  bd_telecom_postgres_data:
