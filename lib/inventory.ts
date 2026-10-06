@@ -20,11 +20,41 @@ type GetInventoryOptions = {
   rom?: number;
   minPrice?: number;
   maxPrice?: number;
+  batchFrom?: string;
+  batchTo?: string;
   sort?: "buying-asc" | "buying-desc" | "selling-asc" | "selling-desc";
 };
 
+function getBatchDateFilter(batchFrom?: string, batchTo?: string) {
+  if (!batchFrom && !batchTo) {
+    return undefined;
+  }
+
+  const filter: {
+    gte?: Date;
+    lt?: Date;
+  } = {};
+
+  if (batchFrom) {
+    filter.gte = new Date(`${batchFrom}T00:00:00`);
+  }
+
+  if (batchTo) {
+    const endDate = new Date(`${batchTo}T00:00:00`);
+    endDate.setDate(endDate.getDate() + 1);
+    filter.lt = endDate;
+  }
+
+  return filter;
+}
+
 export async function getInventory(options: GetInventoryOptions = {}) {
   const search = options.search?.trim();
+
+  const batchDateFilter = getBatchDateFilter(
+    options.batchFrom,
+    options.batchTo,
+  );
 
   const phones = await prisma.phone.findMany({
     where: {
@@ -67,7 +97,9 @@ export async function getInventory(options: GetInventoryOptions = {}) {
           }
         : {}),
 
-      ...(options.minPrice !== undefined || options.maxPrice !== undefined
+      ...(options.minPrice !== undefined ||
+      options.maxPrice !== undefined ||
+      batchDateFilter
         ? {
             stockBatches: {
               some: {
@@ -78,11 +110,18 @@ export async function getInventory(options: GetInventoryOptions = {}) {
                       },
                     }
                   : {}),
+
                 ...(options.maxPrice !== undefined
                   ? {
                       sellingPrice: {
                         lte: options.maxPrice,
                       },
+                    }
+                  : {}),
+
+                ...(batchDateFilter
+                  ? {
+                      purchaseDate: batchDateFilter,
                     }
                   : {}),
               },

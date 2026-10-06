@@ -28,7 +28,16 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Local filter state
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+
+  const [brand, setBrand] = useState(searchParams.get("brand") ?? "");
+
+  const [ram, setRam] = useState(searchParams.get("ram") ?? "");
+
+  const [rom, setRom] = useState(searchParams.get("rom") ?? "");
+
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "");
 
   const [minPriceInput, setMinPriceInput] = useState(
     searchParams.get("minPrice") ?? "",
@@ -38,16 +47,22 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
     searchParams.get("maxPrice") ?? "",
   );
 
-  const brand = searchParams.get("brand") ?? "";
-  const ram = searchParams.get("ram") ?? "";
-  const rom = searchParams.get("rom") ?? "";
-  const sort = searchParams.get("sort") ?? "";
+  const [batchFrom, setBatchFrom] = useState(
+    searchParams.get("batchFrom") ?? "",
+  );
+
+  const [batchTo, setBatchTo] = useState(searchParams.get("batchTo") ?? "");
 
   const selectedBrandName =
     brands.find((item) => item.id === brand)?.name ?? "";
 
   function updateFilters(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+
+    // Validate batch date range
+    if (batchFrom && batchTo && batchFrom > batchTo) {
+      return;
+    }
 
     const params = new URLSearchParams();
 
@@ -67,6 +82,10 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
       params.set("rom", rom);
     }
 
+    if (sort) {
+      params.set("sort", sort);
+    }
+
     if (minPriceInput) {
       params.set("minPrice", minPriceInput);
     }
@@ -75,8 +94,12 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
       params.set("maxPrice", maxPriceInput);
     }
 
-    if (sort) {
-      params.set("sort", sort);
+    if (batchFrom) {
+      params.set("batchFrom", batchFrom);
+    }
+
+    if (batchTo) {
+      params.set("batchTo", batchTo);
     }
 
     const query = params.toString();
@@ -86,28 +109,16 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
 
   function clearFilters() {
     setSearch("");
+    setBrand("");
+    setRam("");
+    setRom("");
+    setSort("");
     setMinPriceInput("");
     setMaxPriceInput("");
+    setBatchFrom("");
+    setBatchTo("");
 
     router.push("/inventory");
-  }
-
-  function handleSelectChange(key: string, value: string | null) {
-    if (!value) {
-      return;
-    }
-
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (value === "all") {
-      params.delete(key);
-    } else {
-      params.set(key, value);
-    }
-
-    const query = params.toString();
-
-    router.push(query ? `/inventory?${query}` : "/inventory");
   }
 
   return (
@@ -151,10 +162,6 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
               className="h-11 pl-9"
             />
           </div>
-
-          <Button type="submit" className="h-11 px-5">
-            Search
-          </Button>
         </div>
 
         <Separator />
@@ -164,7 +171,10 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
           {/* Brand */}
           <Select
             value={brand || "all"}
-            onValueChange={(value) => handleSelectChange("brand", value)}
+            onValueChange={(value) => {
+              if (!value) return;
+              setBrand(value === "all" ? "" : value);
+            }}
           >
             <SelectTrigger className="h-11 w-full">
               <SelectValue>
@@ -186,7 +196,10 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
           {/* RAM */}
           <Select
             value={ram || "all"}
-            onValueChange={(value) => handleSelectChange("ram", value)}
+            onValueChange={(value) => {
+              if (!value) return;
+              setRam(value === "all" ? "" : value);
+            }}
           >
             <SelectTrigger className="h-11 w-full">
               <SelectValue>{ram ? `${ram} GB` : "All RAM"}</SelectValue>
@@ -206,7 +219,10 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
           {/* ROM */}
           <Select
             value={rom || "all"}
-            onValueChange={(value) => handleSelectChange("rom", value)}
+            onValueChange={(value) => {
+              if (!value) return;
+              setRom(value === "all" ? "" : value);
+            }}
           >
             <SelectTrigger className="h-11 w-full">
               <SelectValue>
@@ -228,9 +244,10 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
           {/* Sort */}
           <Select
             value={sort || "newest"}
-            onValueChange={(value) =>
-              handleSelectChange("sort", value === "newest" ? "all" : value)
-            }
+            onValueChange={(value) => {
+              if (!value) return;
+              setSort(value === "newest" ? "" : value);
+            }}
           >
             <SelectTrigger className="h-11 w-full">
               <SelectValue>
@@ -268,31 +285,71 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
           </Select>
         </div>
 
-        {/* Price range */}
-        <div className="grid grid-cols-2 gap-3">
-          <Input
-            type="number"
-            min="0"
-            placeholder="Min selling price"
-            value={minPriceInput}
-            onChange={(event) => setMinPriceInput(event.target.value)}
-            name="minPrice"
-            className="h-11"
-          />
+        {/* Batch date range */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            Batch purchase date
+          </p>
 
-          <Input
-            type="number"
-            min="0"
-            placeholder="Max selling price"
-            value={maxPriceInput}
-            onChange={(event) => setMaxPriceInput(event.target.value)}
-            name="maxPrice"
-            className="h-11"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              type="date"
+              value={batchFrom}
+              onChange={(event) => setBatchFrom(event.target.value)}
+              className="h-11"
+              aria-label="Batch purchase date from"
+            />
+
+            <Input
+              type="date"
+              value={batchTo}
+              onChange={(event) => setBatchTo(event.target.value)}
+              className="h-11"
+              aria-label="Batch purchase date to"
+            />
+          </div>
+
+          {batchFrom && batchTo && batchFrom > batchTo && (
+            <p className="text-xs text-destructive">
+              From date cannot be later than To date.
+            </p>
+          )}
         </div>
 
-        <Button type="submit" variant="secondary" className="w-full">
-          Apply price range
+        {/* Price range */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            Selling price range
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              type="number"
+              min="0"
+              placeholder="Minimum price"
+              value={minPriceInput}
+              onChange={(event) => setMinPriceInput(event.target.value)}
+              className="h-11"
+            />
+
+            <Input
+              type="number"
+              min="0"
+              placeholder="Maximum price"
+              value={maxPriceInput}
+              onChange={(event) => setMaxPriceInput(event.target.value)}
+              className="h-11"
+            />
+          </div>
+        </div>
+
+        {/* Apply */}
+        <Button
+          type="submit"
+          className="h-11 w-full"
+          disabled={Boolean(batchFrom && batchTo && batchFrom > batchTo)}
+        >
+          Apply Filters
         </Button>
       </form>
     </div>

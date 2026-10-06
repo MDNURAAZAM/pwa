@@ -20,6 +20,8 @@ type InventoryPageProps = {
     minPrice?: string;
     maxPrice?: string;
     sort?: string;
+    batchFrom?: string;
+    batchTo?: string;
   }>;
 };
 
@@ -38,6 +40,9 @@ export default async function InventoryPage({
 
   const maxPrice = params.maxPrice ? Number(params.maxPrice) : undefined;
 
+  const batchFrom = params.batchFrom ?? "";
+  const batchTo = params.batchTo ?? "";
+
   const sort =
     params.sort === "buying-asc" ||
     params.sort === "buying-desc" ||
@@ -54,6 +59,8 @@ export default async function InventoryPage({
       rom,
       minPrice,
       maxPrice,
+      batchFrom,
+      batchTo,
       sort,
     }),
     getAvailableBrands(),

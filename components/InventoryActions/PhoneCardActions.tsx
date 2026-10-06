@@ -1,9 +1,10 @@
 "use client";
 
-import { Boxes, Pencil } from "lucide-react";
+import { Boxes, LineChart, Pencil } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { BuyingPriceHistoryDialog } from "./BuyingPriceHistoryDialog";
 import { EditPhoneDialog } from "./EditPhoneDialog";
 import { ManageStockDialog } from "./ManageStockDialog";
 
@@ -41,15 +42,16 @@ type PhoneCardActionsProps = {
 export function PhoneCardActions({ phone, brands }: PhoneCardActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [manageStockOpen, setManageStockOpen] = useState(false);
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
 
   return (
     <>
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="w-full gap-1.5 sm:w-auto"
           onClick={() => setEditOpen(true)}
         >
           <Pencil className="size-4" />
@@ -60,11 +62,22 @@ export function PhoneCardActions({ phone, brands }: PhoneCardActionsProps) {
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="w-full gap-1.5 sm:w-auto"
           onClick={() => setManageStockOpen(true)}
         >
           <Boxes className="size-4" />
           Stock
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full gap-1.5 sm:w-auto"
+          onClick={() => setPriceHistoryOpen(true)}
+        >
+          <LineChart className="size-4" />
+          Price History
         </Button>
       </div>
 
@@ -87,6 +100,13 @@ export function PhoneCardActions({ phone, brands }: PhoneCardActionsProps) {
         stockBatches={phone.stockBatches}
         open={manageStockOpen}
         onOpenChange={setManageStockOpen}
+      />
+
+      <BuyingPriceHistoryDialog
+        phoneName={phone.name}
+        stockBatches={phone.stockBatches}
+        open={priceHistoryOpen}
+        onOpenChange={setPriceHistoryOpen}
       />
     </>
   );
