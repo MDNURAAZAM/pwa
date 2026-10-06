@@ -2,9 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function getAvailableBrands() {
   return prisma.brand.findMany({
-    where: {
-      isActive: true,
-    },
+    where: { isActive: true },
     select: {
       id: true,
       name: true,
@@ -15,8 +13,84 @@ export async function getAvailableBrands() {
   });
 }
 
-export async function getInventory() {
-  return prisma.phone.findMany({
+type GetInventoryOptions = {
+  search?: string;
+  brandId?: string;
+  ram?: number;
+  rom?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: "buying-asc" | "buying-desc" | "selling-asc" | "selling-desc";
+};
+
+export async function getInventory(options: GetInventoryOptions = {}) {
+  const search = options.search?.trim();
+
+  const phones = await prisma.phone.findMany({
+    where: {
+      ...(search
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+              {
+                brand: {
+                  name: {
+                    contains: search,
+                    mode: "insensitive",
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+
+      ...(options.brandId
+        ? {
+            brandId: options.brandId,
+          }
+        : {}),
+
+      ...(options.ram
+        ? {
+            ram: options.ram,
+          }
+        : {}),
+
+      ...(options.rom
+        ? {
+            rom: options.rom,
+          }
+        : {}),
+
+      ...(options.minPrice !== undefined || options.maxPrice !== undefined
+        ? {
+            stockBatches: {
+              some: {
+                ...(options.minPrice !== undefined
+                  ? {
+                      sellingPrice: {
+                        gte: options.minPrice,
+                      },
+                    }
+                  : {}),
+                ...(options.maxPrice !== undefined
+                  ? {
+                      sellingPrice: {
+                        lte: options.maxPrice,
+                      },
+                    }
+                  : {}),
+              },
+            },
+          }
+        : {}),
+    },
+
     include: {
       brand: {
         select: {
@@ -24,10 +98,12 @@ export async function getInventory() {
           name: true,
         },
       },
+
       stockBatches: {
         orderBy: {
           purchaseDate: "desc",
         },
+
         select: {
           id: true,
           buyingPrice: true,
@@ -38,8 +114,47 @@ export async function getInventory() {
         },
       },
     },
+
     orderBy: {
       createdAt: "desc",
     },
+  });
+
+  if (!options.sort) {
+    return phones;
+  }
+
+  return [...phones].sort((a, b) => {
+    const aBatch = a.stockBatches[0];
+    const bBatch = b.stockBatches[0];
+
+    if (!aBatch && !bBatch) {
+      return 0;
+    }
+
+    if (!aBatch) {
+      return 1;
+    }
+
+    if (!bBatch) {
+      return -1;
+    }
+
+    switch (options.sort) {
+      case "buying-asc":
+        return Number(aBatch.buyingPrice) - Number(bBatch.buyingPrice);
+
+      case "buying-desc":
+        return Number(bBatch.buyingPrice) - Number(aBatch.buyingPrice);
+
+      case "selling-asc":
+        return Number(aBatch.sellingPrice) - Number(bBatch.sellingPrice);
+
+      case "selling-desc":
+        return Number(bBatch.sellingPrice) - Number(aBatch.sellingPrice);
+
+      default:
+        return 0;
+    }
   });
 }
