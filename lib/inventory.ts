@@ -1,15 +1,45 @@
 import { prisma } from "@/lib/prisma";
 
 export async function getAvailableBrands() {
-  const phones = await prisma.phone.findMany({
-    distinct: ["brand"],
+  return prisma.brand.findMany({
+    where: {
+      isActive: true,
+    },
     select: {
-      brand: true,
+      id: true,
+      name: true,
     },
     orderBy: {
-      brand: "asc",
+      name: "asc",
     },
   });
+}
 
-  return phones.map((phone) => phone.brand);
+export async function getInventory() {
+  return prisma.phone.findMany({
+    include: {
+      brand: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      stockBatches: {
+        orderBy: {
+          purchaseDate: "desc",
+        },
+        select: {
+          id: true,
+          buyingPrice: true,
+          sellingPrice: true,
+          purchaseDate: true,
+          quantity: true,
+          remainingQuantity: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
 }

@@ -1,11 +1,7 @@
 import { z } from "zod";
 
 export const addPhoneSchema = z.object({
-  brand: z
-    .string()
-    .trim()
-    .min(1, "Brand is required")
-    .max(100, "Brand is too long"),
+  brandId: z.string().trim().min(1, "Brand is required"),
 
   name: z
     .string()

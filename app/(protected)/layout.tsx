@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import { DashboardHeader } from "@/components/DashboardHeader/DashboardHeader";
 
-export default async function DashboardLayout({
+export default async function ProtectedLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

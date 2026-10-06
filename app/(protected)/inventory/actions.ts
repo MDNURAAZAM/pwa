@@ -23,7 +23,7 @@ export async function addPhone(formData: FormData): Promise<AddPhoneResult> {
   }
 
   const rawData = {
-    brand: formData.get("brand"),
+    brandId: formData.get("brandId"),
     name: formData.get("name"),
     ram: formData.get("ram"),
     rom: formData.get("rom"),
@@ -64,7 +64,7 @@ export async function addPhone(formData: FormData): Promise<AddPhoneResult> {
     await prisma.$transaction(async (tx) => {
       const phone = await tx.phone.create({
         data: {
-          brand: data.brand,
+          brandId: data.brandId,
           name: data.name,
           ram: data.ram,
           rom: data.rom,
