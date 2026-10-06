@@ -1,23 +1,27 @@
 "use client";
 
-import { Search, SlidersHorizontal, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 
 type Brand = {
   id: string;
   name: string;
+};
+
+type SearchSuggestion = {
+  id: string;
+  name: string;
+  ram: number;
+  rom: number;
+  brand: {
+    id: string;
+    name: string;
+  };
 };
 
 type InventoryFiltersProps = {
@@ -28,10 +32,9 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Local filter state
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
 
-  const [brand, setBrand] = useState(searchParams.get("brand") ?? "");
+  const [brandId, setBrandId] = useState(searchParams.get("brandId") ?? "");
 
   const [ram, setRam] = useState(searchParams.get("ram") ?? "");
 
@@ -39,30 +42,148 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
 
   const [sort, setSort] = useState(searchParams.get("sort") ?? "");
 
-  const [minPriceInput, setMinPriceInput] = useState(
-    searchParams.get("minPrice") ?? "",
-  );
-
-  const [maxPriceInput, setMaxPriceInput] = useState(
-    searchParams.get("maxPrice") ?? "",
-  );
-
   const [batchFrom, setBatchFrom] = useState(
     searchParams.get("batchFrom") ?? "",
   );
 
   const [batchTo, setBatchTo] = useState(searchParams.get("batchTo") ?? "");
 
-  const selectedBrandName =
-    brands.find((item) => item.id === brand)?.name ?? "";
+  const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") ?? "");
 
-  function updateFilters(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
+  const [maxPrice, setMaxPrice] = useState(searchParams.get("maxPrice") ?? "");
 
-    // Validate batch date range
-    if (batchFrom && batchTo && batchFrom > batchTo) {
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
+  const [dateError, setDateError] = useState("");
+
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const skipNextSuggestionFetch = useRef(false);
+
+  /*
+   * Fetch search suggestions with debounce.
+   */
+  useEffect(() => {
+    const query = search.trim();
+
+    let cancelled = false;
+    if (skipNextSuggestionFetch.current) {
+      skipNextSuggestionFetch.current = false;
       return;
     }
+
+    if (query.length < 2) {
+      const timer = window.setTimeout(() => {
+        if (cancelled) return;
+
+        setSuggestions([]);
+        setIsLoadingSuggestions(false);
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setIsLoadingSuggestions(true);
+
+        const response = await fetch(
+          `/api/inventory/search?q=${encodeURIComponent(query)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch search suggestions.");
+        }
+
+        const data = (await response.json()) as SearchSuggestion[];
+
+        if (!cancelled) {
+          setSuggestions(data);
+          setShowSuggestions(true);
+        }
+      } catch (error) {
+        console.error("Search suggestion error:", error);
+
+        if (!cancelled) {
+          setSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSuggestions(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [search]);
+
+  /*
+   * Close suggestions when clicking outside.
+   */
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+
+    if (value.trim().length >= 2) {
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  }
+
+  function handleSuggestionSelect(suggestion: SearchSuggestion) {
+    skipNextSuggestionFetch.current = true;
+
+    setSearch(suggestion.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setIsLoadingSuggestions(false);
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.set("search", suggestion.name);
+
+    router.push(`/inventory?${params.toString()}`);
+  }
+
+  function handleApplyFilters(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (batchFrom && batchTo && batchFrom > batchTo) {
+      setDateError("Purchase date 'From' cannot be later than 'To'.");
+      return;
+    }
+
+    setDateError("");
 
     const params = new URLSearchParams();
 
@@ -70,8 +191,8 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
       params.set("search", search.trim());
     }
 
-    if (brand) {
-      params.set("brand", brand);
+    if (brandId) {
+      params.set("brandId", brandId);
     }
 
     if (ram) {
@@ -86,14 +207,6 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
       params.set("sort", sort);
     }
 
-    if (minPriceInput) {
-      params.set("minPrice", minPriceInput);
-    }
-
-    if (maxPriceInput) {
-      params.set("maxPrice", maxPriceInput);
-    }
-
     if (batchFrom) {
       params.set("batchFrom", batchFrom);
     }
@@ -102,256 +215,302 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
       params.set("batchTo", batchTo);
     }
 
+    if (minPrice) {
+      params.set("minPrice", minPrice);
+    }
+
+    if (maxPrice) {
+      params.set("maxPrice", maxPrice);
+    }
+
     const query = params.toString();
 
     router.push(query ? `/inventory?${query}` : "/inventory");
+
+    setShowSuggestions(false);
   }
 
-  function clearFilters() {
+  function handleClear() {
     setSearch("");
-    setBrand("");
+    setBrandId("");
     setRam("");
     setRom("");
     setSort("");
-    setMinPriceInput("");
-    setMaxPriceInput("");
     setBatchFrom("");
     setBatchTo("");
+    setMinPrice("");
+    setMaxPrice("");
+    setDateError("");
+    setSuggestions([]);
+    setShowSuggestions(false);
 
     router.push("/inventory");
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-            <SlidersHorizontal className="size-4 text-primary" />
-          </div>
+    <form onSubmit={handleApplyFilters} className="space-y-5">
+      {/* Search */}
+      <div ref={searchContainerRef} className="relative">
+        <Label htmlFor="inventory-search">Search phones</Label>
 
-          <div>
-            <h2 className="text-sm font-semibold">Search & Filters</h2>
+        <div className="relative mt-2">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-            <p className="text-xs text-muted-foreground">Find phones quickly</p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={clearFilters}
-          className="gap-1.5 text-muted-foreground"
-        >
-          <X className="size-4" />
-          Clear
-        </Button>
-      </div>
-
-      <form onSubmit={updateFilters} className="space-y-4">
-        {/* Search */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search phone or brand..."
-              className="h-11 pl-9"
-            />
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Select filters */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Brand */}
-          <Select
-            value={brand || "all"}
-            onValueChange={(value) => {
-              if (!value) return;
-              setBrand(value === "all" ? "" : value);
+          <Input
+            id="inventory-search"
+            value={search}
+            onChange={(event) => handleSearchChange(event.target.value)}
+            onFocus={() => {
+              if (search.trim().length >= 2 && suggestions.length > 0) {
+                setShowSuggestions(true);
+              }
             }}
-          >
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue>
-                {brand ? selectedBrandName || "Select brand" : "All brands"}
-              </SelectValue>
-            </SelectTrigger>
+            placeholder="Search phone or brand..."
+            className="pl-9 pr-9"
+            autoComplete="off"
+          />
 
-            <SelectContent>
-              <SelectItem value="all">All brands</SelectItem>
-
-              {brands.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* RAM */}
-          <Select
-            value={ram || "all"}
-            onValueChange={(value) => {
-              if (!value) return;
-              setRam(value === "all" ? "" : value);
-            }}
-          >
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue>{ram ? `${ram} GB` : "All RAM"}</SelectValue>
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="all">All RAM</SelectItem>
-
-              {[2, 3, 4, 6, 8, 12, 16, 24].map((value) => (
-                <SelectItem key={value} value={String(value)}>
-                  {value} GB
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* ROM */}
-          <Select
-            value={rom || "all"}
-            onValueChange={(value) => {
-              if (!value) return;
-              setRom(value === "all" ? "" : value);
-            }}
-          >
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue>
-                {rom ? (rom === "1024" ? "1 TB" : `${rom} GB`) : "All ROM"}
-              </SelectValue>
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="all">All ROM</SelectItem>
-
-              {[32, 64, 128, 256, 512, 1024].map((value) => (
-                <SelectItem key={value} value={String(value)}>
-                  {value === 1024 ? "1 TB" : `${value} GB`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Sort */}
-          <Select
-            value={sort || "newest"}
-            onValueChange={(value) => {
-              if (!value) return;
-              setSort(value === "newest" ? "" : value);
-            }}
-          >
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue>
-                {sort === "selling-asc"
-                  ? "Selling price: Low → High"
-                  : sort === "selling-desc"
-                    ? "Selling price: High → Low"
-                    : sort === "buying-asc"
-                      ? "Buying price: Low → High"
-                      : sort === "buying-desc"
-                        ? "Buying price: High → Low"
-                        : "Newest first"}
-              </SelectValue>
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="newest">Newest first</SelectItem>
-
-              <SelectItem value="selling-asc">
-                Selling price: Low → High
-              </SelectItem>
-
-              <SelectItem value="selling-desc">
-                Selling price: High → Low
-              </SelectItem>
-
-              <SelectItem value="buying-asc">
-                Buying price: Low → High
-              </SelectItem>
-
-              <SelectItem value="buying-desc">
-                Buying price: High → Low
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Batch date range */}
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Batch purchase date
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="date"
-              value={batchFrom}
-              onChange={(event) => setBatchFrom(event.target.value)}
-              className="h-11"
-              aria-label="Batch purchase date from"
-            />
-
-            <Input
-              type="date"
-              value={batchTo}
-              onChange={(event) => setBatchTo(event.target.value)}
-              className="h-11"
-              aria-label="Batch purchase date to"
-            />
-          </div>
-
-          {batchFrom && batchTo && batchFrom > batchTo && (
-            <p className="text-xs text-destructive">
-              From date cannot be later than To date.
-            </p>
+          {isLoadingSuggestions && (
+            <div className="absolute right-3 top-1/2 size-4 -translate-y-1/2">
+              <div className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+            </div>
           )}
         </div>
 
-        {/* Price range */}
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            Selling price range
-          </p>
+        {/* Suggestions dropdown */}
+        {showSuggestions && search.trim().length >= 2 && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border bg-popover shadow-lg">
+            {suggestions.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto p-1">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    onClick={() => handleSuggestionSelect(suggestion)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted active:bg-muted"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Search className="size-4 text-primary" />
+                    </div>
 
-          <div className="grid grid-cols-2 gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {suggestion.brand.name} {suggestion.name}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {suggestion.ram}GB RAM · {suggestion.rom}GB ROM
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : !isLoadingSuggestions ? (
+              <div className="px-4 py-5 text-center">
+                <p className="text-sm font-medium">No phones found</p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try another phone name or brand.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Brand / RAM / ROM */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor="inventory-brand">Brand</Label>
+
+          <select
+            id="inventory-brand"
+            value={brandId}
+            onChange={(event) => setBrandId(event.target.value)}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">All brands</option>
+
+            {brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="inventory-ram">RAM</Label>
+
+          <select
+            id="inventory-ram"
+            value={ram}
+            onChange={(event) => setRam(event.target.value)}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">All RAM</option>
+            <option value="2">2GB</option>
+            <option value="3">3GB</option>
+            <option value="4">4GB</option>
+            <option value="6">6GB</option>
+            <option value="8">8GB</option>
+            <option value="12">12GB</option>
+            <option value="16">16GB</option>
+            <option value="24">24GB</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="inventory-rom">ROM</Label>
+
+          <select
+            id="inventory-rom"
+            value={rom}
+            onChange={(event) => setRom(event.target.value)}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">All ROM</option>
+            <option value="32">32GB</option>
+            <option value="64">64GB</option>
+            <option value="128">128GB</option>
+            <option value="256">256GB</option>
+            <option value="512">512GB</option>
+            <option value="1024">1TB</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Sort */}
+      <div className="space-y-2">
+        <Label htmlFor="inventory-sort">Sort by price</Label>
+
+        <select
+          id="inventory-sort"
+          value={sort}
+          onChange={(event) => setSort(event.target.value)}
+          className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">Default</option>
+          <option value="buying-asc">Buying price: Low to High</option>
+          <option value="buying-desc">Buying price: High to Low</option>
+          <option value="selling-asc">Selling price: Low to High</option>
+          <option value="selling-desc">Selling price: High to Low</option>
+        </select>
+      </div>
+
+      {/* Purchase date */}
+      <div className="space-y-2">
+        <Label>Purchase date range</Label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label
+              htmlFor="inventory-batch-from"
+              className="text-xs text-muted-foreground"
+            >
+              From
+            </Label>
+
             <Input
-              type="number"
-              min="0"
-              placeholder="Minimum price"
-              value={minPriceInput}
-              onChange={(event) => setMinPriceInput(event.target.value)}
-              className="h-11"
+              id="inventory-batch-from"
+              type="date"
+              value={batchFrom}
+              onChange={(event) => {
+                setBatchFrom(event.target.value);
+                setDateError("");
+              }}
+              className="mt-1"
             />
+          </div>
+
+          <div>
+            <Label
+              htmlFor="inventory-batch-to"
+              className="text-xs text-muted-foreground"
+            >
+              To
+            </Label>
 
             <Input
-              type="number"
-              min="0"
-              placeholder="Maximum price"
-              value={maxPriceInput}
-              onChange={(event) => setMaxPriceInput(event.target.value)}
-              className="h-11"
+              id="inventory-batch-to"
+              type="date"
+              value={batchTo}
+              onChange={(event) => {
+                setBatchTo(event.target.value);
+                setDateError("");
+              }}
+              className="mt-1"
             />
           </div>
         </div>
 
-        {/* Apply */}
+        {dateError && <p className="text-sm text-destructive">{dateError}</p>}
+      </div>
+
+      {/* Price */}
+      <div className="space-y-2">
+        <Label>Selling price range</Label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label
+              htmlFor="inventory-min-price"
+              className="text-xs text-muted-foreground"
+            >
+              Minimum
+            </Label>
+
+            <Input
+              id="inventory-min-price"
+              type="number"
+              min="0"
+              placeholder="৳ Minimum"
+              value={minPrice}
+              onChange={(event) => setMinPrice(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label
+              htmlFor="inventory-max-price"
+              className="text-xs text-muted-foreground"
+            >
+              Maximum
+            </Label>
+
+            <Input
+              id="inventory-max-price"
+              type="number"
+              min="0"
+              placeholder="৳ Maximum"
+              value={maxPrice}
+              onChange={(event) => setMaxPrice(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={handleClear}
+        >
+          Clear
+        </Button>
+
         <Button
           type="submit"
-          className="h-11 w-full"
+          className="w-full sm:w-auto"
           disabled={Boolean(batchFrom && batchTo && batchFrom > batchTo)}
         >
           Apply Filters
         </Button>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

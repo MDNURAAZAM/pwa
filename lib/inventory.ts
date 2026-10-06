@@ -197,3 +197,65 @@ export async function getInventory(options: GetInventoryOptions = {}) {
     }
   });
 }
+
+export async function getInventorySearchSuggestions(search: string) {
+  const query = search.trim();
+
+  if (!query) {
+    return [];
+  }
+
+  const phones = await prisma.phone.findMany({
+    where: {
+      OR: [
+        {
+          name: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+        {
+          brand: {
+            name: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+        },
+      ],
+    },
+
+    select: {
+      id: true,
+      name: true,
+      ram: true,
+      rom: true,
+
+      brand: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+
+    orderBy: [
+      {
+        name: "asc",
+      },
+    ],
+
+    take: 8,
+  });
+
+  return phones.map((phone) => ({
+    id: phone.id,
+    name: phone.name,
+    ram: phone.ram,
+    rom: phone.rom,
+    brand: {
+      id: phone.brand.id,
+      name: phone.brand.name,
+    },
+  }));
+}
