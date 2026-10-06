@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { getAvailableBrands, getInventory } from "@/lib/inventory";
 import { InventoryFilters } from "@/components/InventoryFilters/InventoryFilters";
+import { PhoneCardActions } from "@/components/InventoryActions/PhoneCardActions";
 
 type InventoryPageProps = {
   searchParams: Promise<{
@@ -113,76 +114,187 @@ export default async function InventoryPage({
           ) : (
             <div className="space-y-3">
               {phones.map((phone) => {
-                const totalStock = phone.stockBatches.reduce(
+                const totalQuantity = phone.stockBatches.reduce(
+                  (total, batch) => total + batch.quantity,
+                  0,
+                );
+
+                const remainingQuantity = phone.stockBatches.reduce(
                   (total, batch) => total + batch.remainingQuantity,
                   0,
                 );
 
                 const latestBatch = phone.stockBatches[0];
 
-                return (
-                  <div
-                    key={phone.id}
-                    className="rounded-xl border p-4 transition-colors hover:bg-muted/30 sm:p-5"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      {/* Phone information */}
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base font-semibold">
-                            {phone.name}
-                          </h3>
+                const buyingPrice = latestBatch
+                  ? Number(latestBatch.buyingPrice)
+                  : 0;
 
-                          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                const sellingPrice = latestBatch
+                  ? Number(latestBatch.sellingPrice)
+                  : 0;
+
+                const profitPerUnit = sellingPrice - buyingPrice;
+
+                const latestPurchaseDate = latestBatch
+                  ? latestBatch.purchaseDate.toLocaleDateString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : null;
+
+                const isOutOfStock = remainingQuantity === 0;
+
+                return (
+                  <article
+                    key={phone.id}
+                    className="rounded-2xl border bg-card p-4 shadow-sm"
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                             {phone.brand.name}
                           </span>
+
+                          {isOutOfStock ? (
+                            <span className="rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                              Out of stock
+                            </span>
+                          ) : (
+                            <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              In stock
+                            </span>
+                          )}
                         </div>
 
-                        <p className="mt-1.5 text-sm text-muted-foreground">
-                          {phone.ram} GB RAM · {phone.rom} GB ROM
+                        <h2 className="truncate text-base font-semibold">
+                          {phone.name}
+                        </h2>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {phone.ram} GB RAM ·{" "}
+                          {phone.rom >= 1024 ? "1 TB" : `${phone.rom} GB`} ROM
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Stock summary */}
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Remaining
+                        </p>
+
+                        <p className="mt-1 text-lg font-semibold">
+                          {remainingQuantity}
                         </p>
                       </div>
 
-                      {/* Stock information */}
-                      <div className="grid grid-cols-3 gap-5 sm:flex sm:items-center sm:gap-8">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Stock</p>
+                      <div className="rounded-xl bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Total stock
+                        </p>
 
-                          <p className="mt-0.5 font-semibold">{totalStock}</p>
+                        <p className="mt-1 text-lg font-semibold">
+                          {totalQuantity}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Pricing */}
+                    {/* Latest batch */}
+                    <div className="mt-3 rounded-xl border bg-muted/20 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Latest stock batch
+                          </p>
+
+                          {latestPurchaseDate && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Purchased {latestPurchaseDate}
+                            </p>
+                          )}
                         </div>
 
                         {latestBatch && (
-                          <>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Buy
-                              </p>
-
-                              <p className="mt-0.5 font-medium">
-                                ৳
-                                {Number(
-                                  latestBatch.buyingPrice,
-                                ).toLocaleString()}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Sell
-                              </p>
-
-                              <p className="mt-0.5 font-medium">
-                                ৳
-                                {Number(
-                                  latestBatch.sellingPrice,
-                                ).toLocaleString()}
-                              </p>
-                            </div>
-                          </>
+                          <span className="shrink-0 rounded-md bg-background px-2 py-1 text-xs font-medium">
+                            Qty {latestBatch.quantity}
+                          </span>
                         )}
                       </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-background p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Buying price
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold">
+                            ৳{buyingPrice.toLocaleString("en-BD")}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg bg-background p-3">
+                          <p className="text-xs text-muted-foreground">
+                            Selling price
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold">
+                            ৳{sellingPrice.toLocaleString("en-BD")}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Profit */}
+                    <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-3 py-2.5">
+                      <span className="text-sm text-muted-foreground">
+                        Profit / unit
+                      </span>
+
+                      <span
+                        className={`text-sm font-semibold ${
+                          profitPerUnit >= 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-destructive"
+                        }`}
+                      >
+                        {profitPerUnit >= 0 ? "+" : ""}৳
+                        {profitPerUnit.toLocaleString("en-BD")}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-4">
+                      <PhoneCardActions
+                        phone={{
+                          id: phone.id,
+                          name: phone.name,
+                          ram: phone.ram,
+                          rom: phone.rom,
+                          brand: {
+                            id: phone.brand.id,
+                            name: phone.brand.name,
+                          },
+                          stockBatches: phone.stockBatches.map((batch) => ({
+                            id: batch.id,
+                            buyingPrice: Number(batch.buyingPrice),
+                            sellingPrice: Number(batch.sellingPrice),
+                            purchaseDate: batch.purchaseDate
+                              .toISOString()
+                              .slice(0, 10),
+                            quantity: batch.quantity,
+                            remainingQuantity: batch.remainingQuantity,
+                          })),
+                        }}
+                        brands={brands}
+                      />
+                    </div>
+                  </article>
                 );
               })}
             </div>
