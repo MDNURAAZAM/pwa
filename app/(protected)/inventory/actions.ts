@@ -75,27 +75,33 @@ export async function addPhone(formData: FormData): Promise<AddPhoneResult> {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const phone = await tx.phone.create({
-        data: {
-          brandId: data.brandId,
-          name: data.name,
-          ram: data.ram,
-          rom: data.rom,
-        },
-      });
+    await prisma.$transaction(
+      async (tx) => {
+        const phone = await tx.phone.create({
+          data: {
+            brandId: data.brandId,
+            name: data.name,
+            ram: data.ram,
+            rom: data.rom,
+          },
+        });
 
-      await tx.stockBatch.create({
-        data: {
-          phoneId: phone.id,
-          buyingPrice: data.buyingPrice,
-          sellingPrice: data.sellingPrice,
-          purchaseDate,
-          quantity: data.quantity,
-          remainingQuantity: data.quantity,
-        },
-      });
-    });
+        await tx.stockBatch.create({
+          data: {
+            phoneId: phone.id,
+            buyingPrice: data.buyingPrice,
+            sellingPrice: data.sellingPrice,
+            purchaseDate,
+            quantity: data.quantity,
+            remainingQuantity: data.quantity,
+          },
+        });
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      },
+    );
 
     revalidatePath("/dashboard");
     revalidatePath("/inventory");
@@ -470,80 +476,79 @@ export async function sellPhone(formData: FormData): Promise<SellPhoneResult> {
   const { stockBatchId, quantity } = result.data;
 
   try {
-    const sale = await prisma.$transaction(async (tx) => {
-      const batch = await tx.stockBatch.findUnique({
-        where: {
-          id: stockBatchId,
-        },
-      });
-
-      if (!batch) {
-        throw new Error("Stock batch not found.");
-      }
-
-      if (batch.remainingQuantity < quantity) {
-        throw new Error(
-          `Only ${batch.remainingQuantity} unit${
-            batch.remainingQuantity === 1 ? "" : "s"
-          } available.`,
-        );
-      }
-
-      const totalAmount = batch.sellingPrice.mul(quantity);
-
-      const totalProfit = batch.sellingPrice
-        .sub(batch.buyingPrice)
-        .mul(quantity);
-
-      /*
-       * Update stock first.
-       *
-       * The remainingQuantity condition protects against
-       * selling more stock if another request happens at
-       * nearly the same time.
-       */
-      const stockUpdate = await tx.stockBatch.updateMany({
-        where: {
-          id: stockBatchId,
-          remainingQuantity: {
-            gte: quantity,
+    const sale = await prisma.$transaction(
+      async (tx) => {
+        const batch = await tx.stockBatch.findUnique({
+          where: {
+            id: stockBatchId,
           },
-        },
-        data: {
-          remainingQuantity: {
-            decrement: quantity,
+        });
+
+        if (!batch) {
+          throw new Error("Stock batch not found.");
+        }
+
+        if (batch.remainingQuantity < quantity) {
+          throw new Error(
+            `Only ${batch.remainingQuantity} unit${
+              batch.remainingQuantity === 1 ? "" : "s"
+            } available.`,
+          );
+        }
+
+        const totalAmount = batch.sellingPrice.mul(quantity);
+
+        const totalProfit = batch.sellingPrice
+          .sub(batch.buyingPrice)
+          .mul(quantity);
+
+        const stockUpdate = await tx.stockBatch.updateMany({
+          where: {
+            id: stockBatchId,
+            remainingQuantity: {
+              gte: quantity,
+            },
           },
-        },
-      });
+          data: {
+            remainingQuantity: {
+              decrement: quantity,
+            },
+          },
+        });
 
-      if (stockUpdate.count !== 1) {
-        throw new Error(
-          "Stock changed before the sale could be completed. Please try again.",
-        );
-      }
+        if (stockUpdate.count !== 1) {
+          throw new Error(
+            "Stock changed before the sale could be completed. Please try again.",
+          );
+        }
 
-      const newSale = await tx.sale.create({
-        data: {
-          userId: session.user.id,
-          totalAmount,
-          totalProfit,
-          status: "COMPLETED",
-        },
-      });
+        const newSale = await tx.sale.create({
+          data: {
+            userId: session.user.id,
+            totalAmount,
+            totalProfit,
+            status: "COMPLETED",
+          },
+        });
 
-      await tx.saleItem.create({
-        data: {
-          saleId: newSale.id,
-          stockBatchId: batch.id,
-          quantity,
-          buyingPrice: batch.buyingPrice,
-          sellingPrice: batch.sellingPrice,
-          profit: totalProfit,
-        },
-      });
+        await tx.saleItem.create({
+          data: {
+            saleId: newSale.id,
+            stockBatchId: batch.id,
+            quantity,
+            buyingPrice: batch.buyingPrice,
+            sellingPrice: batch.sellingPrice,
+            profit: totalProfit,
+          },
+        });
 
-      return newSale;
-    });
+        return newSale;
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      },
+    );
 
     revalidatePath("/inventory");
     revalidatePath("/dashboard");

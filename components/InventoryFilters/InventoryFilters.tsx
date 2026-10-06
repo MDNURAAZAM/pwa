@@ -34,7 +34,7 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
 
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
 
-  const [brandId, setBrandId] = useState(searchParams.get("brandId") ?? "");
+  const [brandId, setBrandId] = useState(searchParams.get("brand") ?? "");
 
   const [ram, setRam] = useState(searchParams.get("ram") ?? "");
 
@@ -192,7 +192,7 @@ export function InventoryFilters({ brands }: InventoryFiltersProps) {
     }
 
     if (brandId) {
-      params.set("brandId", brandId);
+      params.set("brand", brandId);
     }
 
     if (ram) {
