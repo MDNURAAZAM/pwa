@@ -7,10 +7,56 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getInventory } from "@/lib/inventory";
+import { getAvailableBrands, getInventory } from "@/lib/inventory";
+import { InventoryFilters } from "@/components/InventoryFilters/InventoryFilters";
 
-export default async function InventoryPage() {
-  const phones = await getInventory();
+type InventoryPageProps = {
+  searchParams: Promise<{
+    search?: string;
+    brand?: string;
+    ram?: string;
+    rom?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+  }>;
+};
+
+export default async function InventoryPage({
+  searchParams,
+}: InventoryPageProps) {
+  const params = await searchParams;
+
+  const search = params.search ?? "";
+  const brandId = params.brand ?? "";
+
+  const ram = params.ram ? Number(params.ram) : undefined;
+  const rom = params.rom ? Number(params.rom) : undefined;
+
+  const minPrice = params.minPrice ? Number(params.minPrice) : undefined;
+
+  const maxPrice = params.maxPrice ? Number(params.maxPrice) : undefined;
+
+  const sort =
+    params.sort === "buying-asc" ||
+    params.sort === "buying-desc" ||
+    params.sort === "selling-asc" ||
+    params.sort === "selling-desc"
+      ? params.sort
+      : undefined;
+
+  const [phones, brands] = await Promise.all([
+    getInventory({
+      search,
+      brandId,
+      ram,
+      rom,
+      minPrice,
+      maxPrice,
+      sort,
+    }),
+    getAvailableBrands(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 sm:space-y-6">
@@ -33,6 +79,17 @@ export default async function InventoryPage() {
           <Plus className="size-4" />
           Add Phone
         </Link>
+      </div>
+
+      <InventoryFilters brands={brands} />
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Inventory</h2>
+
+          <p className="text-sm text-muted-foreground">
+            {phones.length} {phones.length === 1 ? "phone" : "phones"} found
+          </p>
+        </div>
       </div>
 
       {/* Inventory Card */}
