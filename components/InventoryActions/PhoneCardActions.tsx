@@ -1,12 +1,13 @@
 "use client";
 
-import { Boxes, LineChart, Pencil } from "lucide-react";
+import { Boxes, LineChart, Pencil, ShoppingCart } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { BuyingPriceHistoryDialog } from "./BuyingPriceHistoryDialog";
 import { EditPhoneDialog } from "./EditPhoneDialog";
 import { ManageStockDialog } from "./ManageStockDialog";
+import { SellPhoneDialog } from "./SellPhoneDialog";
 
 type Brand = {
   id: string;
@@ -43,41 +44,53 @@ export function PhoneCardActions({ phone, brands }: PhoneCardActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [manageStockOpen, setManageStockOpen] = useState(false);
   const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+  const [sellOpen, setSellOpen] = useState(false);
 
   return (
     <>
-      <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+      <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="w-full gap-1.5 sm:w-auto"
+          className="w-full gap-1 px-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
           onClick={() => setEditOpen(true)}
         >
-          <Pencil className="size-4" />
-          Edit
+          <Pencil className="size-4 shrink-0" />
+          <span className="truncate">Edit</span>
         </Button>
 
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="w-full gap-1.5 sm:w-auto"
+          className="w-full gap-1 px-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
           onClick={() => setManageStockOpen(true)}
         >
-          <Boxes className="size-4" />
-          Stock
+          <Boxes className="size-4 shrink-0" />
+          <span className="truncate">Stock</span>
         </Button>
 
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="w-full gap-1.5 sm:w-auto"
+          className="w-full gap-1 px-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
           onClick={() => setPriceHistoryOpen(true)}
         >
-          <LineChart className="size-4" />
-          Price History
+          <LineChart className="size-4 shrink-0" />
+          <span className="truncate">Price</span>
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full gap-1 px-1.5 text-xs sm:w-auto sm:px-3 sm:text-sm"
+          onClick={() => setSellOpen(true)}
+        >
+          <ShoppingCart className="size-4 shrink-0" />
+          <span className="truncate">Sell</span>
         </Button>
       </div>
 
@@ -107,6 +120,13 @@ export function PhoneCardActions({ phone, brands }: PhoneCardActionsProps) {
         stockBatches={phone.stockBatches}
         open={priceHistoryOpen}
         onOpenChange={setPriceHistoryOpen}
+      />
+
+      <SellPhoneDialog
+        phoneName={phone.name}
+        stockBatches={phone.stockBatches}
+        open={sellOpen}
+        onOpenChange={setSellOpen}
       />
     </>
   );
