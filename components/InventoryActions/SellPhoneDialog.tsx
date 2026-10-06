@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { ShoppingCart } from "lucide-react";
 
+import { sellPhone } from "@/app/(protected)/inventory/actions";
 import {
   Dialog,
   DialogContent,
@@ -36,14 +37,17 @@ export function SellPhoneDialog({
   open,
   onOpenChange,
 }: SellPhoneDialogProps) {
+  const [selectedBatchId, setSelectedBatchId] = useState(
+    stockBatches.find((batch) => batch.remainingQuantity > 0)?.id ?? "",
+  );
+
+  const [quantity, setQuantity] = useState("1");
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
   const availableBatches = stockBatches.filter(
     (batch) => batch.remainingQuantity > 0,
   );
-
-  const [selectedBatchId, setSelectedBatchId] = useState(
-    availableBatches[0]?.id ?? "",
-  );
-  const [quantity, setQuantity] = useState("1");
 
   const selectedBatch = availableBatches.find(
     (batch) => batch.id === selectedBatchId,
@@ -67,9 +71,66 @@ export function SellPhoneDialog({
 
       setSelectedBatchId(firstBatch?.id ?? "");
       setQuantity("1");
+      setMessage("");
     }
 
     onOpenChange(value);
+  }
+
+  function handleBatchChange(batchId: string) {
+    setSelectedBatchId(batchId);
+    setQuantity("1");
+    setMessage("");
+  }
+
+  function handleQuantityChange(value: string) {
+    setQuantity(value);
+    setMessage("");
+  }
+
+  function handleCompleteSale() {
+    if (!selectedBatch) {
+      setMessage("Please select a stock batch.");
+      return;
+    }
+
+    const saleQuantity = Number(quantity);
+
+    if (!Number.isInteger(saleQuantity) || saleQuantity < 1) {
+      setMessage("Quantity must be at least 1.");
+      return;
+    }
+
+    if (saleQuantity > selectedBatch.remainingQuantity) {
+      setMessage(
+        `Only ${selectedBatch.remainingQuantity} unit${
+          selectedBatch.remainingQuantity === 1 ? "" : "s"
+        } available.`,
+      );
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.set("stockBatchId", selectedBatch.id);
+    formData.set("quantity", String(saleQuantity));
+
+    setMessage("");
+
+    startTransition(async () => {
+      const result = await sellPhone(formData);
+
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      setMessage(result.message);
+
+      setTimeout(() => {
+        onOpenChange(false);
+      }, 700);
+    });
   }
 
   return (
@@ -100,8 +161,9 @@ export function SellPhoneDialog({
               <select
                 id="sell-stock-batch"
                 value={selectedBatchId}
-                onChange={(event) => setSelectedBatchId(event.target.value)}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                onChange={(event) => handleBatchChange(event.target.value)}
+                disabled={isPending}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {availableBatches.map((batch) => (
                   <option key={batch.id} value={batch.id}>
@@ -146,7 +208,10 @@ export function SellPhoneDialog({
                     min="1"
                     max={selectedBatch.remainingQuantity}
                     value={quantity}
-                    onChange={(event) => setQuantity(event.target.value)}
+                    disabled={isPending}
+                    onChange={(event) =>
+                      handleQuantityChange(event.target.value)
+                    }
                   />
 
                   <p className="text-xs text-muted-foreground">
@@ -170,25 +235,35 @@ export function SellPhoneDialog({
                       Estimated profit
                     </span>
 
-                    <span className="font-semibold text-green-600">
+                    <span
+                      className={`font-semibold ${
+                        totalProfit >= 0 ? "text-green-600" : "text-destructive"
+                      }`}
+                    >
                       ৳{totalProfit.toLocaleString("en-BD")}
                     </span>
                   </div>
                 </div>
 
+                {message && (
+                  <div className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+                    {message}
+                  </div>
+                )}
+
                 <Button
                   type="button"
                   className="w-full gap-2"
                   disabled={
+                    isPending ||
                     saleQuantity < 1 ||
                     saleQuantity > selectedBatch.remainingQuantity
                   }
-                  onClick={() => {
-                    // Database sale action will be added next.
-                  }}
+                  onClick={handleCompleteSale}
                 >
                   <ShoppingCart className="size-4" />
-                  Complete Sale
+
+                  {isPending ? "Completing Sale..." : "Complete Sale"}
                 </Button>
               </>
             )}

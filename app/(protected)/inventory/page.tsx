@@ -192,21 +192,20 @@ export default async function InventoryPage({
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <div className="rounded-xl bg-muted/50 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Remaining
-                        </p>
-
-                        <p className="mt-1 text-lg font-semibold">
-                          {remainingQuantity}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-muted/50 p-3">
-                        <p className="text-xs text-muted-foreground">
                           Total stock
                         </p>
 
                         <p className="mt-1 text-lg font-semibold">
                           {totalQuantity}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Remaining
+                        </p>
+
+                        <p className="mt-1 text-lg font-semibold text-green-500">
+                          {remainingQuantity}
                         </p>
                       </div>
                     </div>

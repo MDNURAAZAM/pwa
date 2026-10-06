@@ -18,6 +18,10 @@ export type InventoryActionResult = {
   message: string;
 };
 
+export type SellPhoneResult = {
+  success: boolean;
+  message: string;
+};
 /* -------------------------------------------------------------------------- */
 /* Add new phone                                                               */
 /* -------------------------------------------------------------------------- */
@@ -271,6 +275,11 @@ export async function updateStockBatch(
       },
       include: {
         saleItems: {
+          where: {
+            sale: {
+              status: "COMPLETED",
+            },
+          },
           select: {
             quantity: true,
           },
@@ -424,6 +433,132 @@ export async function addStock(
     return {
       success: false,
       message: "Failed to add stock.",
+    };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sell an existing phone                                              */
+/* -------------------------------------------------------------------------- */
+const sellPhoneSchema = z.object({
+  stockBatchId: z.string().min(1),
+  quantity: z.coerce.number().int().positive(),
+});
+
+export async function sellPhone(formData: FormData): Promise<SellPhoneResult> {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return {
+      success: false,
+      message: "You must be logged in.",
+    };
+  }
+
+  const result = sellPhoneSchema.safeParse({
+    stockBatchId: formData.get("stockBatchId"),
+    quantity: formData.get("quantity"),
+  });
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error.issues[0]?.message ?? "Invalid sale information.",
+    };
+  }
+
+  const { stockBatchId, quantity } = result.data;
+
+  try {
+    const sale = await prisma.$transaction(async (tx) => {
+      const batch = await tx.stockBatch.findUnique({
+        where: {
+          id: stockBatchId,
+        },
+      });
+
+      if (!batch) {
+        throw new Error("Stock batch not found.");
+      }
+
+      if (batch.remainingQuantity < quantity) {
+        throw new Error(
+          `Only ${batch.remainingQuantity} unit${
+            batch.remainingQuantity === 1 ? "" : "s"
+          } available.`,
+        );
+      }
+
+      const totalAmount = batch.sellingPrice.mul(quantity);
+
+      const totalProfit = batch.sellingPrice
+        .sub(batch.buyingPrice)
+        .mul(quantity);
+
+      /*
+       * Update stock first.
+       *
+       * The remainingQuantity condition protects against
+       * selling more stock if another request happens at
+       * nearly the same time.
+       */
+      const stockUpdate = await tx.stockBatch.updateMany({
+        where: {
+          id: stockBatchId,
+          remainingQuantity: {
+            gte: quantity,
+          },
+        },
+        data: {
+          remainingQuantity: {
+            decrement: quantity,
+          },
+        },
+      });
+
+      if (stockUpdate.count !== 1) {
+        throw new Error(
+          "Stock changed before the sale could be completed. Please try again.",
+        );
+      }
+
+      const newSale = await tx.sale.create({
+        data: {
+          userId: session.user.id,
+          totalAmount,
+          totalProfit,
+          status: "COMPLETED",
+        },
+      });
+
+      await tx.saleItem.create({
+        data: {
+          saleId: newSale.id,
+          stockBatchId: batch.id,
+          quantity,
+          buyingPrice: batch.buyingPrice,
+          sellingPrice: batch.sellingPrice,
+          profit: totalProfit,
+        },
+      });
+
+      return newSale;
+    });
+
+    revalidatePath("/inventory");
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      message: `Sale completed successfully. Sale ID: ${sale.id}`,
+    };
+  } catch (error) {
+    console.error("Failed to complete sale:", error);
+
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to complete sale.",
     };
   }
 }
