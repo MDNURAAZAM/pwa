@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,9 +26,13 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
+    const params = new URLSearchParams(window.location.search);
+    const callbackUrl = params.get("callbackUrl") || "/dashboard";
+
     const result = await signIn("credentials", {
       username: username.trim(),
       password,
+      callbackUrl,
       redirect: false,
     });
 
@@ -41,8 +42,9 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    // NextAuth has successfully created the session.
+    // Navigate using the URL returned by NextAuth.
+    window.location.href = result.url ?? callbackUrl;
   }
 
   return (
